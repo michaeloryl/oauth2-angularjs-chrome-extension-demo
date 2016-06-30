@@ -21,6 +21,11 @@ myApp.controller('PublicCtrl', function ($scope, $http, Data, $q, $timeout, $log
     }, 0);
   });
 
+  $scope.$on('warning', function (event, args) {
+    $log.debug(controller, 'received event:', event, args);
+    alert("Timeout in " + args.remaining + " seconds");
+  });
+
   this.isAuthenticated = Auth.isAuthenticated;
 
   this.doLogin = Auth.doLogin;

@@ -12,6 +12,8 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
   var authenticated = false;
   var expires = 0;
   var expiresTimerId = null;
+  var warning = 0;
+  var warningTimerId = null;
   var userInfo = {};
   var token = null;
 
@@ -28,6 +30,34 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
             $log.error('OAuth2 configuration failed:', JSON.stringify(err));
             config = null;
           });
+
+
+  function doRestore() {
+    var restoredToken = Data.fetch('token');
+
+    if (restoredToken != null) {
+      validateToken(restoredToken, function (results, err) {
+        if (err) {
+          authenticated = false;
+          Broadcast.send("login", getAuthStatus(false, {error: 'Token failed validation'}));
+          $log.error('OAuth2: Token failed validation:', err);
+        } else {
+          var expiresSeconds = results.data.expires_in;
+          token = restoredToken;
+          $log.debug("Restore expiresIn:", expiresSeconds);
+          startTimers(expiresSeconds); //
+          expires = new Date();
+          expires = expires.setSeconds(expires.getSeconds() + expiresSeconds);
+          authenticated = true;
+          fetchUserInfo();
+          Broadcast.send("login", getAuthStatus(true, null));
+          $log.info('OAuth2 restoration: Success');
+        }
+      });
+    } else {
+      $log.debug('No token to restore');
+    }
+  }
 
   function doLogin() {
     var backgroundPage = Chrome.extension.getBackgroundPage(); // secret sauce that allows access to background.js
@@ -47,7 +77,7 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
                   Broadcast.send("login", getAuthStatus(false, {error: 'Token failed validation'}));
                   $log.error('OAuth2: Token failed validation');
                 } else {
-                  startExpiresTimer(expiresSeconds);
+                  startTimers(expiresSeconds); //
                   expires = new Date();
                   expires = expires.setSeconds(expires.getSeconds() + expiresSeconds);
                   Data.store('token', token);
@@ -111,33 +141,6 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
 
   }
 
-  function doRestore() {
-    var restoredToken = Data.fetch('token');
-
-    if (restoredToken != null) {
-      validateToken(restoredToken, function (results, err) {
-        if (err) {
-          authenticated = false;
-          Broadcast.send("login", getAuthStatus(false, {error: 'Token failed validation'}));
-          $log.error('OAuth2: Token failed validation:', err);
-        } else {
-          var expiresSeconds = results.data.expires_in;
-          token = restoredToken;
-          $log.debug("Restore expiresIn:", expiresSeconds);
-          startExpiresTimer(expiresSeconds);
-          expires = new Date();
-          expires = expires.setSeconds(expires.getSeconds() + expiresSeconds);
-          authenticated = true;
-          fetchUserInfo();
-          Broadcast.send("login", getAuthStatus(true, null));
-          $log.info('OAuth2 restoration: Success');
-        }
-      });
-    } else {
-      $log.debug('No token to restore');
-    }
-  }
-
   function fetchUserInfoCb(successCallback, errorCallback) {
     if (token != null) {
       var headers = {};
@@ -166,15 +169,32 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
     );
   }
 
-  function startExpiresTimer(seconds) {
+  function startTimers(seconds) {
     if (expiresTimerId != null) {
       clearTimeout(expiresTimerId);
+    }
+    if (warningTimerId != null) {
+      clearTimeout(warningTimerId);
     }
     expiresTimerId = setTimeout(function () {
       $log.debug('Session has expired');
       doLogout();
     }, seconds * 1000); // seconds * 1000
     $log.debug('Token expiration timer set for', seconds, "seconds");
+
+    if (config.logoutWarningSeconds > 0 && seconds > config.logoutWarningSeconds) {
+      warningTimerId = setTimeout(function () {
+        if (config.autoReLogin) { // auto re-login can cause the user to be prompted, depending on the OAuth2 system
+          $log.info("Automatic re-login initiating");
+          doLogin();
+        } else {
+          $log.debug('Sending session expiration warning');
+          Broadcast.send('warning', {remaining: config.logoutWarningSeconds});
+        }
+      }, (seconds - config.logoutWarningSeconds) * 1000); // seconds * 1000
+
+      $log.debug('Token expiration', (config.autoReLogin ? 're-login' : 'warning'), 'timer set for', seconds - config.logoutWarningSeconds, "seconds");
+    }
   }
 
   function getAuthStatus(success, error) {
