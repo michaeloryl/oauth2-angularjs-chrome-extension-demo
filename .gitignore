@@ -4,3 +4,4 @@
 *.iws
 *.ipr
 app/vendor/
+config-pml.json
