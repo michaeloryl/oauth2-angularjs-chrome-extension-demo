@@ -1,0 +1,8 @@
+{
+  "userInfoUrl": "https://www.googleapis.com/plus/v1/people/me",
+  "userInfoNameField": "displayName",
+  "implicitGrantUrl": "https://accounts.google.com/o/oauth2/auth",
+  "tokenInfoUrl": "https://www.googleapis.com/oauth2/v3/tokeninfo",
+  "clientId": "814368925475-75jkn9a9t3l2hq25vidrqt9f6ibulku9.apps.googleusercontent.com",
+  "scopes": "https://www.googleapis.com/auth/userinfo.profile"
+}

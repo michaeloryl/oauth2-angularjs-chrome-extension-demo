@@ -1,0 +1,24 @@
+{
+  "name": "OAuth2-Test",
+  "version": "0.9.0",
+  "manifest_version": 2,
+  "description": "A demonstration of integrating OAuth2 in a Google Chrome Extension",
+  "homepage_url": "https://github.com/michaeloryl/oauth2-chrome-extension-demo",
+  "default_locale": "en",
+  "browser_action": {
+    "default_title": "OAuth2-Test",
+    "default_popup": "app/views/main.html"
+  },
+  "background": {
+    "scripts": [
+      "app/scripts/background.js"
+    ]
+  },
+  "permissions": [
+    "identity",
+    "storage",
+    "webRequest",
+    "webRequestBlocking",
+    "*://*.pennmutual.com/*"
+  ]
+}

@@ -1,0 +1,223 @@
+myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcast, Data) {
+  var auth = { // this is the service object we'll return
+    doLogin: doLogin,
+    doLogout: doLogout,
+    validateToken: validateToken,
+    getUserInfo: getUserInfo,
+    getUserName: getUserName,
+    isAuthenticated: isAuthenticated
+  };
+
+  var config = {};
+  var authenticated = false;
+  var expires = 0;
+  var expiresTimerId = null;
+  var userInfo = {};
+  var token = null;
+
+  $log.debug('Auth service instantiated');
+
+  $http.get('../../config.json') // fetches the config when the service is instantiated
+      .then(
+          function (jsonConfig) {
+            config = jsonConfig.data;
+            $log.debug('OAuth2 configuration loaded:', JSON.stringify(config));
+            doRestore();
+          },
+          function error(err) {
+            $log.error('OAuth2 configuration failed:', JSON.stringify(err));
+            config = null;
+          });
+
+  function doLogin() {
+    var backgroundPage = Chrome.extension.getBackgroundPage(); // secret sauce that allows access to background.js
+
+    backgroundPage.login(config, $log,
+        function (redirectUrl) {
+          $log.debug('RedirectURL received:', redirectUrl);
+          if (redirectUrl) {
+            var parsed = parse(redirectUrl.substr(Chrome.identity.getRedirectURL("oauth2").length + 1));
+            var expiresSeconds = Number(parsed.expires_in) || 1800;
+            $log.debug('Parsed RedirectURL:', JSON.stringify(parsed));
+            token = parsed.access_token;
+            if (token) {
+              validateToken(token, function (results, err) {
+                if (err) {
+                  authenticated = false;
+                  Broadcast.send("login", getAuthStatus(false, {error: 'Token failed validation'}));
+                  $log.error('OAuth2: Token failed validation');
+                } else {
+                  startExpiresTimer(expiresSeconds);
+                  expires = new Date();
+                  expires = expires.setSeconds(expires.getSeconds() + expiresSeconds);
+                  Data.store('token', token);
+                  authenticated = true;
+                  fetchUserInfo();
+                  Broadcast.send("login", getAuthStatus(true, null));
+                  $log.info('OAuth2: Success');
+                }
+              });
+            } else {
+              authenticated = false;
+              Broadcast.send("login", getAuthStatus(false, {error: 'No token found on URL'}));
+              $log.error('OAuth2: No token found');
+            }
+          } else {
+            authenticated = false;
+            Broadcast.send("login", getAuthStatus(false, {error: 'General error'}));
+            $log.error('OAuth2: General error');
+          }
+        }
+    )
+  }
+
+  function doLogout() {
+    authenticated = false;
+    expiresTimerId = null;
+    expires = 0;
+    token = null;
+    Data.remove('token', token);
+    Broadcast.send("login", getAuthStatus(true, null));
+    $log.debug('Session has been cleared');
+  }
+
+  function getUserInfo() {
+    return userInfo;
+  }
+
+  function getUserName() {
+    if (userInfo) {
+      return userInfo[config.userInfoNameField];
+    }
+    return null;
+  }
+
+  function isAuthenticated() {
+    return authenticated;
+  }
+
+  function validateToken(token, callback) {
+    var url = config.tokenInfoUrl + "?access_token=" + token;
+    $http.get(url) // fetches the config when the service is instantiated
+        .then(
+            function (results) {
+              $log.debug('Validation Results:', JSON.stringify(results.data));
+              callback(results, null);
+            },
+            function error(err) {
+              $log.error('Validation Error:', JSON.stringify(err));
+              callback(null, err);
+            });
+
+  }
+
+  function doRestore() {
+    var restoredToken = Data.fetch('token');
+
+    if (restoredToken != null) {
+      validateToken(restoredToken, function (results, err) {
+        if (err) {
+          authenticated = false;
+          Broadcast.send("login", getAuthStatus(false, {error: 'Token failed validation'}));
+          $log.error('OAuth2: Token failed validation:', err);
+        } else {
+          var expiresSeconds = results.data.expires_in;
+          token = restoredToken;
+          $log.debug("Restore expiresIn:", expiresSeconds);
+          startExpiresTimer(expiresSeconds);
+          expires = new Date();
+          expires = expires.setSeconds(expires.getSeconds() + expiresSeconds);
+          authenticated = true;
+          fetchUserInfo();
+          Broadcast.send("login", getAuthStatus(true, null));
+          $log.info('OAuth2 restoration: Success');
+        }
+      });
+    } else {
+      $log.debug('No token to restore');
+    }
+  }
+
+  function fetchUserInfoCb(successCallback, errorCallback) {
+    if (token != null) {
+      var headers = {};
+      headers['Authorization'] = 'Bearer ' + token;
+
+      var httpConfig = {method: 'GET', url: config.userInfoUrl, headers: headers};
+
+      //noinspection TypeScriptUnresolvedFunction
+      $http(httpConfig).then(successCallback, errorCallback);
+    } else {
+      $log.debug('fetchUserInfoCb token was null')
+    }
+  }
+
+  function fetchUserInfo() {
+    fetchUserInfoCb(
+        function successCallback(info) {
+          userInfo = info.data;
+          $log.debug("Fetched user info:", JSON.stringify(info.data));
+          Broadcast.send('userInfo', {success: true});
+        },
+        function errorCallback(err) {
+          $log.error("Failed to fetch user info:", err);
+          Broadcast.send('userInfo', {success: false});
+        }
+    );
+  }
+
+  function startExpiresTimer(seconds) {
+    if (expiresTimerId != null) {
+      clearTimeout(expiresTimerId);
+    }
+    expiresTimerId = setTimeout(function () {
+      $log.debug('Session has expired');
+      doLogout();
+    }, seconds * 1000); // seconds * 1000
+    $log.debug('Token expiration timer set for', seconds, "seconds");
+  }
+
+  function getAuthStatus(success, error) {
+    return {
+      success: success,
+      authenticated: authenticated,
+      token: token,
+      expires: expires,
+      error: error
+    }
+  }
+
+  function parse(str) {
+    if (typeof str !== 'string') {
+      return {};
+    }
+    str = str.trim().replace(/^(\?|#|&)/, '');
+    if (!str) {
+      return {};
+    }
+    return str.split('&').reduce(function (ret, param) {
+      var parts = param.replace(/\+/g, ' ').split('=');
+      // Firefox (pre 40) decodes `%3D` to `=`
+      // https://github.com/sindresorhus/query-string/pull/37
+      var key = parts.shift();
+      var val = parts.length > 0 ? parts.join('=') : undefined;
+      key = decodeURIComponent(key);
+      // missing `=` should be `null`:
+      // http://w3.org/TR/2012/WD-url-20120524/#collect-url-parameters
+      val = val === undefined ? null : decodeURIComponent(val);
+      if (!ret.hasOwnProperty(key)) {
+        ret[key] = val;
+      }
+      else if (Array.isArray(ret[key])) {
+        ret[key].push(val);
+      }
+      else {
+        ret[key] = [ret[key], val];
+      }
+      return ret;
+    }, {});
+  }
+
+  return auth;
+});
+

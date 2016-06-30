@@ -1,0 +1,46 @@
+<!doctype html>
+<html data-ng-app="myApp" data-ng-csp="">
+<head>
+    <meta charset="UTF-8">
+    <title>OAuth2 Extension</title>
+    <!--
+        <link rel="stylesheet" href="../vendor/bootstrap/dist/css/bootstrap.min.css"/>
+    -->
+    <link rel="stylesheet" href="../css/bootstrap-theme.css"/>
+    <link rel="stylesheet" href="../css/angular-csp.css"/>
+    <link rel="stylesheet" href="../vendor/json-formatter/dist/json-formatter.min.css"/>
+    <style type="text/css">
+        #mainPopup {
+            padding: 10px;
+            height: 100px;
+            width: 325px;
+        }
+
+        h1 {
+            font-size: 2em;
+        }
+    </style>
+</head>
+<body id="mainPopup" >
+
+<div ng-controller="NavCtrl as nav">
+    <button type="button" class="close pull-right" ng-click="nav.closeWindow()"><span class="glyphicon glyphicon-remove" aria-hidden="true"></span></button>
+    <h3 class="text-success" style="margin-top: 0px;">OAuth2 Extension</h3>
+</div>
+
+<div ng-view></div>
+
+<script src="../vendor/jquery/dist/jquery.min.js"></script>
+<script src="../vendor/angular/angular.min.js"></script>
+<script src="../vendor/angular-route/angular-route.min.js"></script>
+<script src="../vendor/angular-local-storage/dist/angular-local-storage.min.js"></script>
+<script src="../vendor/bootstrap/dist/js/bootstrap.js"></script>
+
+<script src="../scripts/app.js"></script>
+<script src="../scripts/controllers/controller.nav.js"></script>
+<script src="../scripts/controllers/controller.public.js"></script>
+<script src="../scripts/services/service.data.js"></script>
+<script src="../scripts/services/service.broadcast.js"></script>
+<script src="../scripts/services/service.auth.js"></script>
+</body>
+</html>
