@@ -30,7 +30,7 @@ myApp.controller('PublicCtrl', function ($scope, $http, Data, $q, $timeout, $log
 
   this.doLogin = Auth.doLogin;
 
-  this.doLogout = Auth.doLogin;
+  this.doLogout = Auth.doLogout;
 
   return this;
 });
