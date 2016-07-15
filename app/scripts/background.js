@@ -3,12 +3,20 @@
 // Any function in this file can be referenced elsewhere by using chrome.extension.getBackgroundPage().myFunction()
 // For example, you can reference the login function as chrome.extension.getBackgroundPage().login()
 
-function login(config, logger, callback) {
-  if (!callback) { // logger param is optional; if there are only two, the second is callback
-    callback = logger;
-    logger = console;
-  }
+var config = {};
+var token = null;
+var logger = console;
 
+function init(cfg, log) {
+  config = cfg;
+  logger = log;
+}
+
+function getLastToken() {
+  return token;
+}
+
+function login(config, callback) {
   var authUrl = config.implicitGrantUrl
       + '?response_type=token&client_id=' + config.clientId
       + '&scope=' + config.scopes
@@ -17,25 +25,49 @@ function login(config, logger, callback) {
   logger.debug('launchWebAuthFlow:', authUrl);
 
   chrome.identity.launchWebAuthFlow({'url': authUrl, 'interactive': true}, function(redirectUrl) {
-    alert("login redirectUrl:" + redirectUrl);
+    var parsed = parse(redirectUrl.substr(chrome.identity.getRedirectURL("oauth2").length + 1));
+    token = parsed.access_token;
     logger.debug('launchWebAuthFlow login complete');
+    return callback(redirectUrl); // call the original callback now that we've intercepted what we needed
+  });
+}
+
+function logout(config, callback) {
+  var logoutUrl = config.logoutUrl;
+
+  chrome.identity.launchWebAuthFlow({'url': logoutUrl, 'interactive': false}, function(redirectUrl) {
+    logger.debug('launchWebAuthFlow logout complete');
     return callback(redirectUrl)
   });
 }
 
-function logout(config, logger, callback) {
-  if (!callback) { // logger param is optional; if there are only two, the second is callback
-    callback = logger;
-    logger = console;
+function parse(str) {
+  if (typeof str !== 'string') {
+    return {};
   }
-
-  var logoutUrl = config.logoutUrl;
-
-  logger.debug('launchWebAuthFlow:', logoutUrl);
-
-  chrome.identity.launchWebAuthFlow({'url': logoutUrl, 'interactive': false}, function(redirectUrl) {
-    alert("logout redirectUrl:" + redirectUrl);
-    logger.debug('launchWebAuthFlow logout complete');
-    return callback(redirectUrl)
-  });
+  str = str.trim().replace(/^(\?|#|&)/, '');
+  if (!str) {
+    return {};
+  }
+  return str.split('&').reduce(function (ret, param) {
+    var parts = param.replace(/\+/g, ' ').split('=');
+    // Firefox (pre 40) decodes `%3D` to `=`
+    // https://github.com/sindresorhus/query-string/pull/37
+    var key = parts.shift();
+    var val = parts.length > 0 ? parts.join('=') : undefined;
+    key = decodeURIComponent(key);
+    // missing `=` should be `null`:
+    // http://w3.org/TR/2012/WD-url-20120524/#collect-url-parameters
+    val = val === undefined ? null : decodeURIComponent(val);
+    if (!ret.hasOwnProperty(key)) {
+      ret[key] = val;
+    }
+    else if (Array.isArray(ret[key])) {
+      ret[key].push(val);
+    }
+    else {
+      ret[key] = [ret[key], val];
+    }
+    return ret;
+  }, {});
 }
