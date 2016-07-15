@@ -16,5 +16,26 @@ function login(config, logger, callback) {
 
   logger.debug('launchWebAuthFlow:', authUrl);
 
-  chrome.identity.launchWebAuthFlow({'url': authUrl, 'interactive': true}, callback);
+  chrome.identity.launchWebAuthFlow({'url': authUrl, 'interactive': true}, function(redirectUrl) {
+    alert("login redirectUrl:" + redirectUrl);
+    logger.debug('launchWebAuthFlow login complete');
+    return callback(redirectUrl)
+  });
+}
+
+function logout(config, logger, callback) {
+  if (!callback) { // logger param is optional; if there are only two, the second is callback
+    callback = logger;
+    logger = console;
+  }
+
+  var logoutUrl = config.logoutUrl;
+
+  logger.debug('launchWebAuthFlow:', logoutUrl);
+
+  chrome.identity.launchWebAuthFlow({'url': logoutUrl, 'interactive': false}, function(redirectUrl) {
+    alert("logout redirectUrl:" + redirectUrl);
+    logger.debug('launchWebAuthFlow logout complete');
+    return callback(redirectUrl)
+  });
 }

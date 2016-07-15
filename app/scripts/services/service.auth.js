@@ -102,6 +102,8 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
   }
 
   function doLogout() {
+    var backgroundPage = Chrome.extension.getBackgroundPage(); // secret sauce that allows access to background.js
+
     authenticated = false;
     expiresTimerId = null;
     expires = 0;
@@ -109,6 +111,11 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
     Data.remove('token', token);
     Broadcast.send("login", getAuthStatus(true, null));
     $log.debug('Session has been cleared');
+    backgroundPage.logout(config, $log,
+        function (redirectUrl) {
+          $log.info("Logged out with webflow");
+        }
+    )
   }
 
   function getUserInfo() {
