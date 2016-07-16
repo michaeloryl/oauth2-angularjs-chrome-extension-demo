@@ -8,6 +8,8 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
     isAuthenticated: isAuthenticated
   };
 
+  var bgp = Chrome.extension.getBackgroundPage(); // this is how we access the extension's background.js page
+
   var config = {};
   var authenticated = false;
   var expires = 0;
@@ -23,6 +25,7 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
       .then(
           function (jsonConfig) {
             config = jsonConfig.data;
+            bgp.init(config, $log);
             $log.debug('OAuth2 configuration loaded:', JSON.stringify(config));
             doRestore();
           },
@@ -33,7 +36,7 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
 
 
   function doRestore() {
-    var restoredToken = Data.fetch('token');
+    var restoredToken = bgp.getLastToken(); // Data.fetch('token');
 
     if (restoredToken != null) {
       validateToken(restoredToken, function (results, err) {
@@ -60,13 +63,11 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
   }
 
   function doLogin() {
-    var backgroundPage = Chrome.extension.getBackgroundPage(); // secret sauce that allows access to background.js
-
-    backgroundPage.login(config, $log,
+    bgp.login(config,
         function (redirectUrl) {
           $log.debug('RedirectURL received:', redirectUrl);
           if (redirectUrl) {
-            var parsed = parse(redirectUrl.substr(Chrome.identity.getRedirectURL("oauth2").length + 1));
+            var parsed = bgp.parse(redirectUrl.substr(Chrome.identity.getRedirectURL("oauth2").length + 1));
             var expiresSeconds = Number(parsed.expires_in) || 1800;
             $log.debug('Parsed RedirectURL:', JSON.stringify(parsed));
             token = parsed.access_token;
@@ -109,6 +110,14 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
     Data.remove('token', token);
     Broadcast.send("login", getAuthStatus(true, null));
     $log.debug('Session has been cleared');
+
+    if (config.logoutUrl != null) {
+      bgp.logout(config,
+          function (redirectUrl) {
+            $log.info("Logged out with webflow");
+          }
+      )
+    }
   }
 
   function getUserInfo() {
@@ -205,37 +214,6 @@ myApp.factory('Auth', function ($window, $timeout, $http, $log, Chrome, Broadcas
       expires: expires,
       error: error
     }
-  }
-
-  function parse(str) {
-    if (typeof str !== 'string') {
-      return {};
-    }
-    str = str.trim().replace(/^(\?|#|&)/, '');
-    if (!str) {
-      return {};
-    }
-    return str.split('&').reduce(function (ret, param) {
-      var parts = param.replace(/\+/g, ' ').split('=');
-      // Firefox (pre 40) decodes `%3D` to `=`
-      // https://github.com/sindresorhus/query-string/pull/37
-      var key = parts.shift();
-      var val = parts.length > 0 ? parts.join('=') : undefined;
-      key = decodeURIComponent(key);
-      // missing `=` should be `null`:
-      // http://w3.org/TR/2012/WD-url-20120524/#collect-url-parameters
-      val = val === undefined ? null : decodeURIComponent(val);
-      if (!ret.hasOwnProperty(key)) {
-        ret[key] = val;
-      }
-      else if (Array.isArray(ret[key])) {
-        ret[key].push(val);
-      }
-      else {
-        ret[key] = [ret[key], val];
-      }
-      return ret;
-    }, {});
   }
 
   return auth;
