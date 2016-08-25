@@ -1,6 +1,6 @@
 {
   "name": "OAuth2-Test",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "manifest_version": 2,
   "description": "A demonstration of integrating OAuth2 in a Google Chrome Extension",
   "homepage_url": "https://github.com/michaeloryl/oauth2-chrome-extension-demo",
