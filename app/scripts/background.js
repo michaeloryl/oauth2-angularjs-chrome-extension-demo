@@ -24,18 +24,24 @@ function login(config, callback) {
 
   logger.debug('launchWebAuthFlow:', authUrl);
 
-  chrome.identity.launchWebAuthFlow({'url': authUrl, 'interactive': true}, function(redirectUrl) {
-    var parsed = parse(redirectUrl.substr(chrome.identity.getRedirectURL("oauth2").length + 1));
-    token = parsed.access_token;
-    logger.debug('launchWebAuthFlow login complete');
-    return callback(redirectUrl); // call the original callback now that we've intercepted what we needed
+  chrome.identity.launchWebAuthFlow({'url': authUrl, 'interactive': true}, function (redirectUrl) {
+    if (redirectUrl) {
+      logger.debug('launchWebAuthFlow login successful: ', redirectUrl);
+      var parsed = parse(redirectUrl.substr(chrome.identity.getRedirectURL("oauth2").length + 1));
+      token = parsed.access_token;
+      logger.debug('Background login complete');
+      return callback(redirectUrl); // call the original callback now that we've intercepted what we needed
+    } else {
+      logger.debug("launchWebAuthFlow login failed. Is your redirect URL (" + chrome.identity.getRedirectURL("oauth2") + ") configured with your OAuth2 provider?");
+      return (null);
+    }
   });
 }
 
 function logout(config, callback) {
   var logoutUrl = config.logoutUrl;
 
-  chrome.identity.launchWebAuthFlow({'url': logoutUrl, 'interactive': false}, function(redirectUrl) {
+  chrome.identity.launchWebAuthFlow({'url': logoutUrl, 'interactive': false}, function (redirectUrl) {
     logger.debug('launchWebAuthFlow logout complete');
     return callback(redirectUrl)
   });
