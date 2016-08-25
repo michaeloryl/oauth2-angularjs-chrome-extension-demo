@@ -1,6 +1,6 @@
 {
   "name": "OAuth2-Extension",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     "Michael Oryl <michael@oryl.com>"
   ],
@@ -22,7 +22,6 @@
     "angular": "1.5.7",
     "angular-local-storage": "^0.2.7",
     "bootstrap": "~3.2.0",
-    "json-formatter": "^0.6.0",
     "angular-route": "^1.5.5"
   },
   "resolutions": {
